@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Thruster-Assisted Emergency Braking · R&D Proposal</title>
+<meta name="description" content="Constrained reinforcement learning for cold-gas thruster-assisted emergency braking at high speed — an interactive visualization of a simulation-based feasibility and control study." />
+<style>
+  :root {
+    --bg: #05070d;
+    --bg-2: #0a0f1c;
+    --panel: rgba(255,255,255,.04);
+    --panel-2: rgba(255,255,255,.02);
+    --border: rgba(255,255,255,.09);
+    --text: #e7edf8;
+    --muted: #93a0b8;
+    --cyan: #22d3ee;
+    --orange: #fb923c;
+    --red: #fb7185;
+    --green: #34d399;
+    --violet: #a78bfa;
+    --grad: linear-gradient(120deg, #22d3ee, #818cf8 55%, #fb923c);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    margin: 0; font-family: var(--font); background: var(--bg); color: var(--text);
+    line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  a { color: var(--cyan); }
+
+  /* background: grid + glow */
+  .bg {
+    position: fixed; inset: 0; z-index: -2;
+    background:
+      radial-gradient(90% 60% at 50% -10%, rgba(34,211,238,.10) 0%, transparent 55%),
+      radial-gradient(60% 50% at 100% 110%, rgba(251,146,60,.08) 0%, transparent 55%);
+  }
+  .bg-grid {
+    position: fixed; inset: 0; z-index: -2; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 78%);
+    mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 78%);
+  }
+
+  /* nav */
+  .nav {
+    position: sticky; top: 0; z-index: 60;
+    backdrop-filter: saturate(180%) blur(18px); -webkit-backdrop-filter: saturate(180%) blur(18px);
+    background: rgba(5,7,13,.66); border-bottom: 1px solid var(--border);
+  }
+  .nav-inner { max-width: 1080px; margin: 0 auto; height: 58px; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--grad); color: #05070d; font-weight: 800; display: grid; place-items: center; font-size: 15px; }
+  .brand h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 8px; transition: all .15s ease; }
+  .nav-links a:hover { color: var(--text); background: var(--panel); }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 22px 70px; }
+
+  /* hero */
+  .hero { position: relative; padding: 54px 0 10px; text-align: center; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan); }
+  .hero h2 {
+    font-size: clamp(34px, 6.4vw, 60px); font-weight: 700; letter-spacing: -.03em; line-height: 1.05; margin: 16px 0 14px;
+    background: linear-gradient(120deg, #fff, #9fd7ff 55%, #ffd3a8);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero .sub { max-width: 720px; margin: 0 auto; color: var(--muted); font-size: 16px; }
+  .hero .sub b { color: var(--text); font-weight: 600; }
+
+  .hero-canvas-wrap {
+    position: relative; margin: 30px auto 6px; max-width: 880px; height: 340px;
+    border: 1px solid var(--border); border-radius: 20px; overflow: hidden;
+    background: linear-gradient(180deg, #0a1222, #060a14);
+    box-shadow: 0 30px 80px -40px rgba(0,0,0,.9);
+  }
+  #heroCanvas { display: block; width: 100%; height: 100%; }
+  .hud {
+    position: absolute; left: 16px; top: 14px; font-family: var(--mono); font-size: 12px; color: var(--muted);
+    display: flex; flex-direction: column; gap: 4px; text-align: left; pointer-events: none;
+  }
+  .hud b { color: var(--cyan); }
+  .hud .warn { color: var(--orange); }
+  .hud .on { color: var(--green); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 24px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--panel); border-radius: 999px; padding: 9px 16px;
+    font-size: 13px; color: var(--muted); backdrop-filter: blur(8px);
+  }
+  .chip b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+
+  /* sections */
+  section { padding: 58px 0 6px; }
+  .sec-head { max-width: 720px; margin: 0 auto 34px; text-align: center; }
+  .sec-head .kicker { font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--orange); }
+  .sec-head h3 { font-size: clamp(24px, 4vw, 34px); font-weight: 700; letter-spacing: -.02em; margin: 10px 0 12px; }
+  .sec-head p { color: var(--muted); font-size: 15.5px; margin: 0; }
+  .sec-head p b { color: var(--text); }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 26px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 20px 60px -40px rgba(0,0,0,.8);
+  }
+
+  /* reveal animation */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* friction chart */
+  .chart-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 26px; align-items: center; }
+  @media (max-width: 820px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-svg { width: 100%; height: auto; display: block; }
+  .axis-label { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
+  .grid-line { stroke: rgba(255,255,255,.06); stroke-width: 1; }
+  .curve { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+  .curve.dim { opacity: .28; }
+  .marker-line { stroke: rgba(255,255,255,.35); stroke-width: 1; stroke-dasharray: 4 4; }
+  .dot { stroke: #05070d; stroke-width: 1.5; }
+
+  .range-wrap { margin-top: 20px; }
+  .range-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 30px; background: transparent; cursor: pointer;
+    --fill: 50%;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--cyan) var(--fill), rgba(255,255,255,.12) var(--fill)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -11px; width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 3px solid var(--cyan); box-shadow: 0 0 0 6px rgba(34,211,238,.18); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); }
+  input[type=range]::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--cyan); }
+  input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 3px solid var(--cyan); }
+
+  .readouts { display: grid; gap: 12px; }
+  .readout { border: 1px solid var(--border); background: var(--panel-2); border-radius: 14px; padding: 14px 16px; }
+  .readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .readout .k .sw { width: 9px; height: 9px; border-radius: 50%; }
+  .readout .v { font-family: var(--mono); font-size: 22px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .readout .v small { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+  /* energy bars */
+  .energy { display: flex; align-items: flex-end; gap: 14px; height: 120px; margin-top: 26px; }
+  .energy .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .energy .bar { width: 100%; border-radius: 8px 8px 0 0; background: linear-gradient(180deg, var(--orange), rgba(251,146,60,.15)); transform-origin: bottom; }
+  .energy .lbl { font-size: 12px; color: var(--muted); margin-top: 8px; font-family: var(--mono); }
+
+  /* thruster calc */
+  .calc { display: grid; gap: 14px; }
+  .calc-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 640px) { .calc-row { grid-template-columns: 1fr; } }
+  .kv { border: 1px solid var(--border); background: var(--panel-2); border-radius: 14px; padding: 16px; }
+  .kv .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .kv .v { font-family: var(--mono); font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; color: var(--cyan); }
+  .kv .v.orange { color: var(--orange); }
+  .gcompare { margin-top: 6px; }
+  .gbar { display: grid; grid-template-columns: 130px 1fr auto; gap: 12px; align-items: center; margin: 10px 0; font-size: 13px; }
+  .gbar .track { height: 14px; border-radius: 8px; background: rgba(255,255,255,.06); overflow: hidden; }
+  .gbar .fill { height: 100%; border-radius: 8px; transition: width .8s cubic-bezier(.2,.7,.2,1); }
+  .gbar .val { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  /* RL loop diagram */
+  .loop { display: flex; flex-direction: column; gap: 10px; max-width: 640px; margin: 0 auto; }
+  .loop-box { border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; background: var(--panel-2); }
+  .loop-box .t { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--cyan); }
+  .loop-box .d { font-size: 14px; color: var(--muted); margin-top: 4px; }
+  .loop-arrows { text-align: center; color: var(--muted); font-size: 18px; line-height: 1; }
+  .constraints { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; justify-content: center; }
+  .constraint { border: 1px solid rgba(251,113,133,.35); background: rgba(251,113,133,.08); color: var(--red); border-radius: 999px; padding: 7px 14px; font-size: 13px; }
+
+  /* comparison cards */
+  .compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 820px) { .compare { grid-template-columns: 1fr; } }
+  .cmp { border: 1px solid var(--border); border-radius: 18px; padding: 22px; background: var(--panel-2); position: relative; overflow: hidden; }
+  .cmp .tag { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .cmp .tag.a { color: var(--muted); }
+  .cmp .tag.b { color: var(--orange); }
+  .cmp .tag.c { color: var(--cyan); }
+  .cmp h4 { font-size: 18px; font-weight: 600; margin: 8px 0 10px; letter-spacing: -.01em; }
+  .cmp p { font-size: 13.5px; color: var(--muted); margin: 0 0 14px; }
+  .cmp.hl { border-color: rgba(34,211,238,.45); box-shadow: 0 0 0 1px rgba(34,211,238,.25), 0 20px 50px -30px rgba(34,211,238,.5); }
+  .cmp .meter { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .cmp .track { height: 10px; border-radius: 6px; background: rgba(255,255,255,.06); overflow: hidden; margin-top: 6px; }
+  .cmp .fill { height: 100%; border-radius: 6px; transition: width 1s cubic-bezier(.2,.7,.2,1); }
+
+  /* RQ cards */
+  .rq { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .rq { grid-template-columns: 1fr; } }
+  .rq-card { border: 1px solid var(--border); border-radius: 16px; padding: 20px; background: var(--panel-2); }
+  .rq-card .n { font-family: var(--mono); font-size: 12px; color: var(--orange); letter-spacing: .1em; }
+  .rq-card h4 { font-size: 16px; font-weight: 600; margin: 8px 0 8px; }
+  .rq-card p { font-size: 13.5px; color: var(--muted); margin: 0; }
+  .hyps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 640px) { .hyps { grid-template-columns: 1fr; } }
+  .hyp { border: 1px solid rgba(167,139,250,.3); background: rgba(167,139,250,.06); border-radius: 14px; padding: 16px 18px; }
+  .hyp b { color: var(--violet); }
+
+  /* phases */
+  .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 820px) { .phases { grid-template-columns: 1fr; } }
+  .phase { border: 1px solid var(--border); border-radius: 18px; padding: 22px; background: var(--panel-2); }
+  .phase .pnum { font-family: var(--mono); font-size: 12px; color: var(--cyan); letter-spacing: .1em; }
+  .phase h4 { font-size: 17px; font-weight: 600; margin: 8px 0 10px; }
+  .phase ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+  .phase li { margin: 5px 0; }
+
+  /* timeline */
+  .timeline { position: relative; max-width: 720px; margin: 0 auto; padding-left: 28px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 4px; bottom: 4px; width: 2px; background: linear-gradient(var(--cyan), var(--orange)); opacity: .5; }
+  .tl-item { position: relative; padding: 0 0 26px 18px; }
+  .tl-item::before { content: ""; position: absolute; left: -26px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--cyan); }
+  .tl-item .m { font-family: var(--mono); font-size: 12px; color: var(--orange); letter-spacing: .1em; }
+  .tl-item .t { font-weight: 600; margin: 3px 0 4px; }
+  .tl-item .d { font-size: 13.5px; color: var(--muted); }
+
+  .deliverables { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .deliverables { grid-template-columns: 1fr; } }
+  .del { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); background: var(--panel-2); border-radius: 12px; padding: 14px 16px; font-size: 13.5px; color: var(--muted); }
+  .del .ic { color: var(--green); flex: 0 0 auto; }
+
+  .scope-note { border: 1px solid rgba(251,146,60,.3); background: rgba(251,146,60,.06); border-radius: 14px; padding: 16px 20px; color: var(--muted); font-size: 13.5px; margin-top: 18px; }
+  .scope-note b { color: var(--orange); }
+
+  footer { border-top: 1px solid var(--border); padding: 34px 0 0; color: var(--muted); font-size: 12.5px; text-align: center; }
+  footer .meta { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: center; margin-bottom: 14px; }
+  footer b { color: var(--text); }
+
+  @media print {
+    .bg, .bg-grid, .nav, .hero-canvas-wrap { display: none; }
+    body { background: #fff; color: #111; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="bg"></div>
+  <div class="bg-grid"></div>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="brand"><div class="mark">🚀</div><h1>Thruster-Assisted AEB</h1></div>
+      <nav class="nav-links">
+        <a href="#friction">Friction</a>
+        <a href="#thrusters">Thrusters</a>
+        <a href="#budget">Budget</a>
+        <a href="#control">Control</a>
+        <a href="#compare">Compare</a>
+        <a href="#timeline">Timeline</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- HERO -->
+    <header class="hero">
+      <div class="eyebrow">M.Sc. Artificial Intelligence · BTU Cottbus–Senftenberg · R&amp;D Proposal</div>
+      <h2>Thruster-Assisted<br />Emergency Braking</h2>
+      <p class="sub"><b>Constrained reinforcement learning</b> for cold-gas thruster–assisted emergency braking at high speed — a simulation-based feasibility &amp; control study.</p>
+
+      <div class="hero-canvas-wrap">
+        <canvas id="heroCanvas"></canvas>
+        <div class="hud" id="hud">
+          <span>SPEED <b id="hudSpeed">0</b> km/h</span>
+          <span>THRUST <b class="on" id="hudThrust">OFF</b></span>
+          <span class="warn" id="hudStatus">APPROACHING RAMP</span>
+        </div>
+      </div>
+      <p class="hero-caption" style="max-width:660px;margin:14px auto 0;color:var(--muted);font-size:13px">Concept animation — cold-gas attitude thrusters re-orient a tumbling vehicle and land it wheels-down.</p>
+
+      <div class="chips">
+        <div class="chip">Thrust <b>80 kN</b></div>
+        <div class="chip">Braking <b>≈ 4.1 g</b></div>
+        <div class="chip">Propellant <b>250 kg</b></div>
+        <div class="chip">Study <b>6 months</b></div>
+      </div>
+    </header>
+
+    <!-- FRICTION LIMIT -->
+    <section id="friction">
+      <div class="sec-head reveal">
+        <div class="kicker">01 · The friction limit</div>
+        <h3>Wheel brakes can only stop as fast as the tires grip</h3>
+        <p>Kinetic energy grows with the <b>square of speed</b> (E = ½mv²), but deceleration is bounded by roughly <b>μ·g</b>. On fast, low-friction roads that limit gets brutal.</p>
+      </div>
+      <div class="panel reveal">
+        <div class="chart-grid">
+          <div>
+            <svg id="frictionChart" class="chart-svg" viewBox="0 0 640 360" role="img" aria-label="Stopping distance versus speed"></svg>
+            <div class="range-wrap">
+              <input type="range" id="speedSlider" min="0" max="250" step="5" value="200" />
+              <div class="range-label"><span>0 km/h</span><span>250 km/h</span></div>
+            </div>
+          </div>
+          <div class="readouts">
+            <div class="readout"><div class="k"><span class="sw" style="background:#fb7185"></span>Dry · μ = 0.9</div><div class="v" id="roDry">175 m</div></div>
+            <div class="readout"><div class="k"><span class="sw" style="background:#fb923c"></span>Wet · μ = 0.5</div><div class="v" id="roWet">315 m</div></div>
+            <div class="readout"><div class="k"><span class="sw" style="background:#38bdf8"></span>Ice · μ = 0.2</div><div class="v" id="roIce">788 m</div></div>
+            <div class="readout"><div class="k">Kinetic energy · m = 2000 kg</div><div class="v" id="roEnergy">3.1 <small>MJ</small></div></div>
+          </div>
+        </div>
+        <div class="energy" aria-hidden="true">
+          <div class="bar-col"><div class="bar" id="e130"></div><div class="lbl">130 km/h</div></div>
+          <div class="bar-col"><div class="bar" id="e200"></div><div class="lbl">200 km/h</div></div>
+          <div class="bar-col"><div class="bar" id="e250"></div><div class="lbl">250 km/h</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- THRUSTERS -->
+    <section id="thrusters">
+      <div class="sec-head reveal">
+        <div class="kicker">02 · Why thrusters</div>
+        <h3>A braking force that doesn't depend on the tires</h3>
+        <p>Oct 2026 — a Tesla Roadster flew on <b>SpaceX cold-gas thrusters</b>: ~80 kN from ~250 kg of compressed air. Forward-facing nozzles could, in principle, decelerate independent of road friction.</p>
+      </div>
+      <div class="panel reveal">
+        <div class="gcompare">
+          <div class="gbar"><span style="color:var(--muted)">Friction braking</span><span class="track"><span class="fill" data-w="22" style="background:var(--red);width:0"></span></span><span class="val">≈ 0.9 g (dry)</span></div>
+          <div class="gbar"><span style="color:var(--cyan)">Thruster braking</span><span class="track"><span class="fill" data-w="100" style="background:var(--cyan);width:0"></span></span><span class="val">40 m/s² ≈ 4.1 g</span></div>
+        </div>
+        <p style="color:var(--muted);font-size:13px;margin:6px 0 0;text-align:center">Manufacturer claims from a staged demo — treated here as motivation, <b style="color:var(--text)">not</b> validated data.</p>
+      </div>
+    </section>
+
+    <!-- BUDGET -->
+    <section id="budget">
+      <div class="sec-head reveal">
+        <div class="kicker">03 · The propellant budget</div>
+        <h3>Only one to two seconds of thrust</h3>
+        <p>At 80 kN the propellant lasts <b>&lt; 2 s</b>. The controller's core decision is <b>when</b> to spend it — drag the exhaust-velocity slider.</p>
+      </div>
+      <div class="panel reveal">
+        <div class="range-wrap">
+          <input type="range" id="veSlider" min="300" max="500" step="10" value="400" />
+          <div class="range-label"><span>Exhaust velocity 300 m/s</span><span>500 m/s</span></div>
+        </div>
+        <div class="calc" style="margin-top:22px">
+          <div class="calc-row">
+            <div class="kv"><div class="k">Mass flow · ṁ = F / vₑ</div><div class="v" id="kvFlow">200 <small style="font-size:13px;color:var(--muted)">kg/s</small></div></div>
+            <div class="kv"><div class="k">Burn time · t = mₚ vₑ / F</div><div class="v" id="kvBurn">1.25 <small style="font-size:13px;color:var(--muted)">s</small></div></div>
+            <div class="kv"><div class="k">Δv (all propellant)</div><div class="v orange" id="kvDv">53 <small style="font-size:13px;color:var(--muted)">m/s · 192 km/h</small></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTROL -->
+    <section id="control">
+      <div class="sec-head reveal">
+        <div class="kicker">04 · The control problem</div>
+        <h3>A thruster is not a drop-in brake</h3>
+        <p>Off-axis thrust creates pitch &amp; yaw moments, propellant is finite, and ~4 g acts on the occupants. Hand-tuned rules won't stay safe across every speed and surface — <b>so learn it, under hard constraints</b>.</p>
+      </div>
+      <div class="panel reveal">
+        <div class="loop">
+          <div class="loop-box"><div class="t">Agent · constrained RL policy (CPO / Lagrangian PPO–SAC)</div><div class="d">Observes telemetry → outputs continuous per-nozzle thrust + brake demand.</div></div>
+          <div class="loop-arrows">▲ action / ▼ state · reward ▼</div>
+          <div class="loop-box"><div class="t">Environment · vehicle digital twin + cold-gas thruster model</div><div class="d">Non-linear tires, load transfer, thrust latency, mass-flow depletion, sensor noise, obstacles.</div></div>
+        </div>
+        <div class="constraints">
+          <span class="constraint">⚠ Yaw rate &amp; sideslip</span>
+          <span class="constraint">⚠ Pitch / rollover</span>
+          <span class="constraint">⚠ Occupant load</span>
+          <span class="constraint">⚠ Propellant budget</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section id="compare">
+      <div class="sec-head reveal">
+        <div class="kicker">05 · Three controllers, one question</div>
+        <h3>Does learned thruster control actually help?</h3>
+        <p>Same scenarios, same seeds — measured in Monte Carlo simulation. Bars below are <b>illustrative</b>; the study produces the real numbers.</p>
+      </div>
+      <div class="compare reveal">
+        <div class="cmp">
+          <div class="tag a">A · Baseline</div>
+          <h4>Friction-only AEB</h4>
+          <p>Time-to-collision braking per UN R152. Bounded by μ·g — the reference point.</p>
+          <div class="meter">Collision avoidance (illustrative)</div>
+          <div class="track"><span class="fill" data-w="58" style="background:var(--red);width:0"></span></div>
+        </div>
+        <div class="cmp">
+          <div class="tag b">B · Rule-based</div>
+          <h4>AEB + fixed thruster trigger</h4>
+          <p>Symmetric thrust at a fixed time-to-collision. Simple, but no adaptation to faults or surfaces.</p>
+          <div class="meter">Collision avoidance (illustrative)</div>
+          <div class="track"><span class="fill" data-w="76" style="background:var(--orange);width:0"></span></div>
+        </div>
+        <div class="cmp hl">
+          <div class="tag c">C · Learned</div>
+          <h4>Constrained RL controller</h4>
+          <p>Trains when &amp; how to fire under safety constraints, with domain randomisation. The hypothesis.</p>
+          <div class="meter">Collision avoidance (illustrative)</div>
+          <div class="track"><span class="fill" data-w="93" style="background:var(--cyan);width:0"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RQ -->
+    <section id="rq">
+      <div class="sec-head reveal">
+        <div class="kicker">06 · Research questions &amp; hypotheses</div>
+        <h3>What the study will answer</h3>
+      </div>
+      <div class="rq reveal">
+        <div class="rq-card"><div class="n">RQ1 · Benefit</div><h4>How much better?</h4><p>Stopping-distance reduction &amp; collision-avoidance gain vs. friction-only AEB, as a function of speed, friction and obstacle distance.</p></div>
+        <div class="rq-card"><div class="n">RQ2 · Safety</div><h4>Can it stay safe?</h4><p>Can a constrained RL policy keep yaw rate, sideslip, pitch and occupant load in bounds — even with asymmetric thrust and delayed actuation?</p></div>
+        <div class="rq-card"><div class="n">RQ3 · Robustness</div><h4>What dominates?</h4><p>Sensitivity to thrust, latency, exhaust velocity, propellant and nozzle geometry — which parameter matters most?</p></div>
+      </div>
+      <div class="hyps reveal">
+        <div class="hyp"><b>H1</b> — Above 200 km/h and on low-friction surfaces, thruster-assisted braking avoids a significantly larger fraction of collisions than friction-only AEB.</div>
+        <div class="hyp"><b>H2</b> — A constrained RL controller attains a higher collision-avoidance rate than a fixed-rule thruster trigger at equal constraint-violation rates.</div>
+      </div>
+    </section>
+
+    <!-- METHODOLOGY -->
+    <section id="method">
+      <div class="sec-head reveal">
+        <div class="kicker">07 · Methodology</div>
+        <h3>Three phases, baseline → thruster → evaluation</h3>
+      </div>
+      <div class="phases reveal">
+        <div class="phase">
+          <div class="pnum">PHASE 1</div>
+          <h4>Model &amp; baseline</h4>
+          <ul>
+            <li>Vehicle digital twin (non-linear tires, load transfer).</li>
+            <li>Friction-only AEB per UN R152.</li>
+            <li>Deep-learning collision predictor with uncertainty.</li>
+          </ul>
+        </div>
+        <div class="phase">
+          <div class="pnum">PHASE 2</div>
+          <h4>Thruster &amp; RL controller</h4>
+          <ul>
+            <li>Parametric cold-gas thruster model (latency, mass-flow decay, moments).</li>
+            <li>Constrained MDP formulation.</li>
+            <li>Train CPO / Lagrangian PPO–SAC with curriculum + domain randomisation.</li>
+          </ul>
+        </div>
+        <div class="phase">
+          <div class="pnum">PHASE 3</div>
+          <h4>Comparative evaluation</h4>
+          <ul>
+            <li>Monte Carlo: AEB vs. rule-based vs. learned.</li>
+            <li>Metrics: avoidance rate, stopping distance, impact speed, constraint violations, propellant.</li>
+            <li>Ablations &amp; sensitivity analysis.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section id="timeline">
+      <div class="sec-head reveal">
+        <div class="kicker">08 · Timeline</div>
+        <h3>Six months, six milestones</h3>
+      </div>
+      <div class="timeline reveal">
+        <div class="tl-item"><div class="m">MONTH 1</div><div class="t">Literature review &amp; vehicle twin</div><div class="d">Systematic review (AEB, safe RL, cold-gas, occupant limits); simulator setup; validated baseline vehicle model.</div></div>
+        <div class="tl-item"><div class="m">MONTH 2</div><div class="t">Scenarios &amp; collision predictor</div><div class="d">High-speed scenario generator; baseline AEB; deep-learning collision-prediction model.</div></div>
+        <div class="tl-item"><div class="m">MONTH 3</div><div class="t">Thruster model &amp; RL environment</div><div class="d">Thruster parameter ranges; constrained MDP; reward &amp; constraints; first training runs.</div></div>
+        <div class="tl-item"><div class="m">MONTH 4</div><div class="t">Training &amp; stability</div><div class="d">Curriculum + domain randomisation; rule-based baseline; stability analysis.</div></div>
+        <div class="tl-item"><div class="m">MONTH 5</div><div class="t">Monte Carlo comparison</div><div class="d">Full comparison, ablations, sensitivity analysis; data pipeline &amp; Power BI report.</div></div>
+        <div class="tl-item"><div class="m">MONTH 6</div><div class="t">Thesis &amp; defence</div><div class="d">Analysis, writing, limitations discussion; thesis submission.</div></div>
+      </div>
+    </section>
+
+    <!-- DELIVERABLES -->
+    <section id="deliverables">
+      <div class="sec-head reveal">
+        <div class="kicker">09 · Deliverables &amp; scope</div>
+        <h3>What comes out of it</h3>
+      </div>
+      <div class="deliverables reveal">
+        <div class="del"><span class="ic">✓</span> Documented simulation framework — vehicle twin, thruster model, scenario generator.</div>
+        <div class="del"><span class="ic">✓</span> Trained constrained-RL controller + AEB and rule-based baselines.</div>
+        <div class="del"><span class="ic">✓</span> Quantified feasibility envelope (benefit &amp; safety vs. speed, friction, thruster parameters).</div>
+        <div class="del"><span class="ic">✓</span> Reproducible Python/SQL pipeline + interactive Power BI report.</div>
+        <div class="del"><span class="ic">✓</span> Master's thesis and, where results allow, a conference paper.</div>
+        <div class="del"><span class="ic">✓</span> Minimum thruster specification for a meaningful benefit.</div>
+      </div>
+      <div class="scope-note reveal"><b>Scope &amp; honesty:</b> results apply to the simulated vehicle &amp; thruster models only — this is <b>not</b> a safety case for hardware. Forward-facing plume, noise, following-vehicle risk and type approval are listed as open issues. A negative result (marginal benefit) is a valid, valuable outcome.</div>
+    </section>
+
+    <footer>
+      <div class="meta">
+        <span>Candidate <b>Talha Siraj</b></span>
+        <span>Context <b>M.Sc. AI · BTU Cottbus–Senftenberg</b></span>
+        <span>Partners <b>German OEMs · Tier-1 · Fraunhofer · DLR</b></span>
+        <span>Duration <b>6 months</b></span>
+      </div>
+      <p>Interactive visualization of a simulation-based feasibility &amp; control study. All thruster figures are manufacturer claims or assumptions — not validated performance data.</p>
+    </footer>
+
+  </main>
+
+<script>
+"use strict";
+
+/* ---------- Reveal on scroll ---------- */
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* ---------- Animated meter fills ---------- */
+const mo = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.width = e.target.dataset.w + '%';
+      mo.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.3 });
+document.querySelectorAll('.fill[data-w]').forEach(el => mo.observe(el));
+
+/* ---------- HERO canvas animation: tumble → thruster-stabilized landing ---------- */
+const cv = document.getElementById('heroCanvas');
+const ctx = cv.getContext('2d');
+function sizeCanvas() { const r = cv.getBoundingClientRect(); cv.width = r.width; cv.height = r.height; }
+sizeCanvas();
+
+function rr(x, y, w, h, r) {
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+const G = 1150;            // gravity (px/s^2)
+const KP = 220, KD = 55;   // attitude-control PD gains
+const CAR_REST = 24;       // distance from body center to wheels' ground contact
+let car, phase, particles = [], groundY, rampX;
+
+function resetScene() {
+  const W = cv.width, H = cv.height;
+  groundY = H - 40;
+  rampX = W * 0.34;
+  car = { x: -150, y: groundY - CAR_REST, vx: 560, vy: 0, a: 0, w: 0 };
+  phase = 'drive'; particles = [];
+}
+resetScene();
+window.addEventListener('resize', () => { sizeCanvas(); resetScene(); });
+
+function normAng(a) { return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
+
+// fire a thruster jet from a local point, exhausting along a local direction
+function jet(lx, ly, dirx, diry) {
+  const c = Math.cos(car.a), s = Math.sin(car.a);
+  const px = car.x + c * lx - s * ly;
+  const py = car.y + s * lx + c * ly;
+  const dx = c * dirx - s * diry;
+  const dy = s * dirx + c * diry;
+  for (let i = 0; i < 4; i++) {
+    particles.push({
+      x: px, y: py,
+      vx: dx * (150 + Math.random() * 130), vy: dy * (150 + Math.random() * 130),
+      life: 1, r: 1.6 + Math.random() * 2.6
+    });
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.033, (now - last) / 1000); last = now;
+  const W = cv.width, H = cv.height;
+
+  // ---- physics ----
+  if (phase === 'drive') {
+    car.x += car.vx * dt;
+    if (car.x >= rampX) { phase = 'air'; car.vx = 300; car.vy = -500; car.w = 4.4; car.a = 0.06; }
+  } else if (phase === 'air') {
+    car.vy += G * dt;
+    const an = normAng(car.a);
+    let torque = -KP * an - KD * car.w;             // attitude PD control
+    torque = Math.max(-26, Math.min(26, torque));
+    car.w += torque * dt;
+    car.a += car.w * dt;
+    // landing assist: soften descent near the ground
+    if (car.y > groundY - 140 && car.vy > 120) { car.vy -= 620 * dt; jet(0, 14, 0, 1); }
+    // reaction-control visuals: counter the current rotation
+    if (car.w > 0.35) jet(-46, -11, 0, -1);
+    else if (car.w < -0.35) jet(46, -11, 0, -1);
+    car.x += car.vx * dt;
+    car.y += car.vy * dt;
+    if (car.y >= groundY - CAR_REST) {
+      phase = 'landed';
+      if (Math.abs(normAng(car.a)) < 0.5) car.a = 0;
+      car.w = 0; car.vy = -46; car.y = groundY - CAR_REST;
+    }
+  } else { // landed: settle, roll off, reset
+    car.vy += G * dt;
+    car.y += car.vy * dt;
+    if (car.y >= groundY - CAR_REST) { car.y = groundY - CAR_REST; car.vy = 0; }
+    car.x += car.vx * 0.4 * dt;
+    if (car.x > W + 200) resetScene();
+  }
+
+  // particles
+  for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * 1.6; }
+  particles = particles.filter(p => p.life > 0);
+
+  // ---- draw ----
+  ctx.clearRect(0, 0, W, H);
+  // road
+  ctx.fillStyle = 'rgba(255,255,255,.045)';
+  ctx.fillRect(0, groundY, W, H - groundY);
+  ctx.strokeStyle = 'rgba(255,255,255,.12)';
+  ctx.setLineDash([26, 20]);
+  ctx.beginPath(); ctx.moveTo(0, groundY + 20); ctx.lineTo(W, groundY + 20); ctx.stroke();
+  ctx.setLineDash([]);
+  // ramp (the "accident" that launches the car)
+  ctx.fillStyle = '#1b2436';
+  ctx.beginPath(); ctx.moveTo(rampX - 70, groundY); ctx.lineTo(rampX + 34, groundY); ctx.lineTo(rampX + 34, groundY - 46); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(251,146,60,.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // thruster plumes
+  for (const p of particles) {
+    const al = Math.max(0, p.life);
+    ctx.fillStyle = `rgba(34,211,238,${al})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+  }
+
+  // car (rotated around its center)
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.a);
+  // wheels
+  ctx.fillStyle = '#0a0f1c'; ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2;
+  [-40, 40].forEach(off => { ctx.beginPath(); ctx.arc(off, 12, 12, 0, 7); ctx.fill(); ctx.stroke(); });
+  // body
+  ctx.fillStyle = '#1b2436';
+  rr(-58, -11, 116, 22, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(34,211,238,.55)'; ctx.lineWidth = 1.4; ctx.stroke();
+  // cabin
+  ctx.fillStyle = '#243252';
+  rr(-26, -25, 44, 16, 5); ctx.fill(); ctx.stroke();
+  // attitude-control nozzles (top corners)
+  ctx.fillStyle = phase === 'air' ? '#22d3ee' : '#3a4a6a';
+  ctx.fillRect(-56, -14, 8, 4);
+  ctx.fillRect(48, -14, 8, 4);
+  ctx.restore();
+
+  // ambient glow while airborne
+  if (phase === 'air') {
+    const g = ctx.createRadialGradient(car.x, car.y, 4, car.x, car.y, 46);
+    g.addColorStop(0, 'rgba(34,211,238,.22)'); g.addColorStop(1, 'rgba(34,211,238,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(car.x, car.y, 46, 0, 7); ctx.fill();
+  }
+
+  // HUD
+  const kmh = Math.round((Math.max(car.vx, 0) / 560) * 250);
+  document.getElementById('hudSpeed').textContent = kmh;
+  const thrustOn = phase === 'air';
+  document.getElementById('hudThrust').textContent = thrustOn ? 'ON' : (phase === 'landed' ? 'IDLE' : 'OFF');
+  document.getElementById('hudThrust').className = thrustOn ? 'on' : '';
+  const status = document.getElementById('hudStatus');
+  if (phase === 'drive') status.textContent = 'APPROACHING RAMP';
+  else if (phase === 'air') status.textContent = 'AIRBORNE · ATTITUDE CONTROL';
+  else status.textContent = 'LANDED WHEELS-DOWN';
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- Friction chart ---------- */
+const svg = document.getElementById('frictionChart');
+const NS = 'http://www.w3.org/2000/svg';
+const M = 2000, G = 9.81;
+const plot = { x0: 62, x1: 620, y0: 22, y1: 316 };
+function pxX(v) { return plot.x0 + (v / 250) * (plot.x1 - plot.x0); }
+function pxY(d, maxD) { return plot.y1 - (Math.min(d, maxD) / maxD) * (plot.y1 - plot.y0); }
+const FRICTION = [
+  { label: 'dry', mu: 0.9, color: '#fb7185' },
+  { label: 'wet', mu: 0.5, color: '#fb923c' },
+  { label: 'ice', mu: 0.2, color: '#38bdf8' }
+];
+const DMAX = 500;
+
+function buildChart() {
+  // clear
+  svg.innerHTML = '';
+  // grid + axes
+  for (let i = 0; i <= 5; i++) {
+    const d = i * 100;
+    const y = pxY(d, DMAX);
+    const line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', plot.x0); line.setAttribute('x2', plot.x1);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('class', 'grid-line');
+    svg.appendChild(line);
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', plot.x0 - 8); t.setAttribute('y', y + 3);
+    t.setAttribute('text-anchor', 'end'); t.setAttribute('class', 'axis-label');
+    t.textContent = d + ' m';
+    svg.appendChild(t);
+  }
+  for (let v = 0; v <= 250; v += 50) {
+    const x = pxX(v);
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', plot.y1 + 20);
+    t.setAttribute('text-anchor', 'middle'); t.setAttribute('class', 'axis-label');
+    t.textContent = v;
+    svg.appendChild(t);
+  }
+  // curves
+  FRICTION.forEach(f => {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('class', 'curve');
+    path.setAttribute('data-mu', f.mu);
+    path.setAttribute('stroke', f.color);
+    path.setAttribute('opacity', '1');
+    let d = '';
+    for (let v = 0; v <= 250; v += 5) {
+      const vms = v / 3.6;
+      const dist = vms * vms / (2 * f.mu * G);
+      d += (v === 0 ? 'M' : 'L') + pxX(v).toFixed(1) + ' ' + pxY(dist, DMAX).toFixed(1) + ' ';
+    }
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  });
+  updateChart();
+}
+
+function updateChart() {
+  const v = +document.getElementById('speedSlider').value;
+  const pct = (v / 250) * 100;
+  document.getElementById('speedSlider').style.setProperty('--fill', pct + '%');
+  // marker line
+  let ml = document.getElementById('markerLine');
+  if (!ml) { ml = document.createElementNS(NS, 'line'); ml.id = 'markerLine'; ml.setAttribute('class', 'marker-line'); svg.appendChild(ml); }
+  ml.setAttribute('x1', pxX(v)); ml.setAttribute('x2', pxX(v));
+  ml.setAttribute('y1', plot.y0); ml.setAttribute('y2', plot.y1);
+
+  const vms = v / 3.6;
+  const energy = 0.5 * M * vms * vms / 1e6; // MJ
+  const readouts = { dry: null, wet: null, ice: null };
+  FRICTION.forEach(f => {
+    const dist = vms * vms / (2 * f.mu * G);
+    readouts[f.label] = dist;
+    // dot
+    let dot = document.getElementById('dot-' + f.label);
+    if (!dot) { dot = document.createElementNS(NS, 'circle'); dot.id = 'dot-' + f.label; dot.setAttribute('r', '5'); dot.setAttribute('class', 'dot'); svg.appendChild(dot); }
+    dot.setAttribute('cx', pxX(v)); dot.setAttribute('cy', pxY(dist, DMAX));
+    dot.setAttribute('fill', f.color);
+  });
+  document.getElementById('roDry').innerHTML = Math.round(readouts.dry) + ' <small>m</small>';
+  document.getElementById('roWet').innerHTML = Math.round(readouts.wet) + ' <small>m</small>';
+  document.getElementById('roIce').innerHTML = Math.round(readouts.ice) + ' <small>m</small>';
+  document.getElementById('roEnergy').innerHTML = energy.toFixed(1) + ' <small>MJ</small>';
+}
+document.getElementById('speedSlider').addEventListener('input', updateChart);
+
+/* energy bars (static, animate on load) */
+const energies = { e130: 1.3, e200: 3.1, e250: 4.8 };
+Object.entries(energies).forEach(([id, val]) => {
+  document.getElementById(id).style.height = (val / 4.8 * 100) + '%';
+});
+
+/* ---------- Thruster calculator ---------- */
+const F = 80000, MP = 250;
+function updateThruster() {
+  const ve = +document.getElementById('veSlider').value;
+  document.getElementById('veSlider').style.setProperty('--fill', ((ve - 300) / 200 * 100) + '%');
+  const flow = F / ve;
+  const burn = MP * ve / F;
+  const dv = ve * Math.log(2000 / 1750);
+  const dvKmh = dv * 3.6;
+  document.getElementById('kvFlow').innerHTML = Math.round(flow) + ' <small style="font-size:13px;color:var(--muted)">kg/s</small>';
+  document.getElementById('kvBurn').innerHTML = burn.toFixed(2) + ' <small style="font-size:13px;color:var(--muted)">s</small>';
+  document.getElementById('kvDv').innerHTML = Math.round(dv) + ' <small style="font-size:13px;color:var(--muted)">m/s · ' + Math.round(dvKmh) + ' km/h</small>';
+}
+document.getElementById('veSlider').addEventListener('input', updateThruster);
+
+/* init */
+buildChart();
+updateThruster();
+</script>
+</body>
+</html>
